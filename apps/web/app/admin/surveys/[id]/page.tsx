@@ -2,6 +2,29 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 
+function AddOption({ questionId, onAdded }: { questionId: string, onAdded: () => void }) {
+  const [label, setLabel] = useState('')
+  const [saving, setSaving] = useState(false)
+  async function add(e: React.FormEvent) {
+    e.preventDefault()
+    if (!label.trim()) return
+    setSaving(true)
+    try {
+      await fetch(`/api/admin/questions/${questionId}/options`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ label })
+      })
+      setLabel('')
+      onAdded()
+    } finally { setSaving(false) }
+  }
+  return (
+    <form className="flex gap-2 mt-2" onSubmit={add}>
+      <input className="border rounded px-2 py-1" placeholder="Add option" value={label} onChange={(e) => setLabel(e.target.value)} />
+      <button className="text-sm bg-gray-800 text-white px-3 py-1 rounded disabled:opacity-50" disabled={saving || !label.trim()}>Add</button>
+    </form>
+  )
+}
+
 export default function BuilderPage({ params }: { params: { id: string } }) {
   const { id } = params
   const [survey, setSurvey] = useState<any | null>(null)
@@ -62,13 +85,30 @@ export default function BuilderPage({ params }: { params: { id: string } }) {
 
       <section>
         <h2 className="font-medium mb-2">Questions</h2>
+        <div className="text-sm text-gray-600 mb-2">After publishing, permalink will appear below. You can also preview drafts.</div>
         <ul className="space-y-2">
           {(survey.questions || []).map((q: any) => (
-            <li key={q.id} className="border p-3 rounded flex items-center justify-between">
-              <div>
-                <div className="font-medium">{q.title}</div>
-                <div className="text-sm text-gray-600">{q.type} {q.required ? '(required)' : ''}</div>
+            <li key={q.id} className="border p-3 rounded space-y-2">
+              <div className="flex items-center justify-between">
+                <div>
+                  <div className="font-medium">{q.title}</div>
+                  <div className="text-sm text-gray-600">{q.type} {q.required ? '(required)' : ''}</div>
+                </div>
               </div>
+              {['SINGLE_SELECT','MULTI_SELECT','DROPDOWN'].includes(q.type) && (
+                <div className="pl-2">
+                  <div className="text-sm font-medium">Options</div>
+                  <ul className="list-disc list-inside text-sm">
+                    {(q.options || []).map((opt: any) => (
+                      <li key={opt.id} className="flex items-center justify-between">
+                        <span>{opt.label}</span>
+                        {/* Option delete could be added here */}
+                      </li>
+                    ))}
+                  </ul>
+                  <AddOption questionId={q.id} onAdded={load} />
+                </div>
+              )}
             </li>
           ))}
         </ul>
@@ -92,11 +132,13 @@ export default function BuilderPage({ params }: { params: { id: string } }) {
         </form>
       </section>
 
-      <section className="space-x-2">
+      <section className="space-x-2 flex items-center gap-2">
         <button className="bg-green-600 text-white px-4 py-2 rounded disabled:opacity-50" onClick={publish} disabled={loading}>Publish</button>
+        <Link className="underline text-blue-600" href={`/preview/${id}`}>Preview</Link>
         {pubLink && (
-          <span>
+          <span className="flex items-center gap-2">
             Published: <Link className="underline text-blue-600" href={pubLink}>{pubLink}</Link>
+            <button className="text-sm border px-2 py-1 rounded" onClick={() => navigator.clipboard.writeText(window.location.origin + pubLink)}>Copy link</button>
           </span>
         )}
       </section>

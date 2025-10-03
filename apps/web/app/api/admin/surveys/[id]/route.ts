@@ -6,7 +6,7 @@ const prisma = new PrismaClient()
 export async function GET(_: NextRequest, { params }: { params: { id: string } }) {
   const survey = await prisma.survey.findUnique({
     where: { id: params.id },
-    include: { questions: { orderBy: { order: 'asc' } } },
+include: { questions: { orderBy: { order: 'asc' }, include: { options: { orderBy: { order: 'asc' } } } } }
   })
   if (!survey) return NextResponse.json({ error: 'not found' }, { status: 404 })
   return NextResponse.json({ survey })

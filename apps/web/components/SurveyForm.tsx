@@ -1,11 +1,13 @@
 "use client"
 import { useMemo, useState } from 'react'
 
+interface Option { id: string; label: string; value: string }
 interface Question {
   id: string
   title: string
   type: string
   required: boolean
+  options?: Option[]
 }
 
 interface Survey {
@@ -15,6 +17,14 @@ interface Survey {
 
 export default function SurveyForm({ survey }: { survey: Survey }) {
   const [values, setValues] = useState<Record<string, any>>({})
+  const answeredCount = useMemo(() => {
+    return questions.reduce((acc, q) => {
+      const v = values[q.id]
+      if (v === undefined || v === null) return acc
+      if (Array.isArray(v)) return acc + (v.length > 0 ? 1 : 0)
+      return acc + (String(v).trim() !== '' ? 1 : 0)
+    }, 0)
+  }, [questions, values])
   const [submitting, setSubmitting] = useState(false)
   const [submittedId, setSubmittedId] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -77,6 +87,9 @@ export default function SurveyForm({ survey }: { survey: Survey }) {
 
   return (
     <form className="space-y-4" onSubmit={onSubmit}>
+      <div className="h-2 bg-gray-200 rounded">
+        <div className="h-2 bg-blue-600 rounded" style={{ width: `${Math.round(((answeredCount)/(questions.length || 1))*100)}%` }} />
+      </div>
       {error && <div className="border border-red-300 bg-red-50 text-red-800 p-3 rounded">{error}</div>}
       {questions.map((q) => (
         <div key={q.id} className="space-y-1">
@@ -94,6 +107,7 @@ export default function SurveyForm({ survey }: { survey: Survey }) {
 }
 
 function Field({ q, value, onChange }: { q: Question, value: any, onChange: (v: any) => void }) {
+  const opts = q.options || []
   switch (q.type) {
     case 'LONG_TEXT':
       return <textarea className="border rounded w-full p-2" rows={4} value={value} onChange={(e) => onChange(e.target.value)} />
@@ -101,6 +115,40 @@ function Field({ q, value, onChange }: { q: Question, value: any, onChange: (v: 
       return <input type="email" className="border rounded w-full p-2" value={value} onChange={(e) => onChange(e.target.value)} />
     case 'NUMBER':
       return <input type="number" className="border rounded w-full p-2" value={value} onChange={(e) => onChange(e.target.value)} />
+    case 'SINGLE_SELECT':
+      return (
+        <div className="space-y-1">
+          {opts.map((o) => (
+            <label key={o.id} className="flex items-center gap-2">
+              <input type="radio" name={q.id} checked={value === o.value} onChange={() => onChange(o.value)} /> {o.label}
+            </label>
+          ))}
+        </div>
+      )
+    case 'MULTI_SELECT':
+      return (
+        <div className="space-y-1">
+          {opts.map((o) => {
+            const arr = Array.isArray(value) ? value as string[] : []
+            const checked = arr.includes(o.value)
+            return (
+              <label key={o.id} className="flex items-center gap-2">
+                <input type="checkbox" checked={checked} onChange={(e) => {
+                  if (e.target.checked) onChange([...arr, o.value])
+                  else onChange(arr.filter((v) => v !== o.value))
+                }} /> {o.label}
+              </label>
+            )
+          })}
+        </div>
+      )
+    case 'DROPDOWN':
+      return (
+        <select className="border rounded w-full p-2" value={value || ''} onChange={(e) => onChange(e.target.value)}>
+          <option value="">Select...</option>
+          {opts.map((o) => <option key={o.id} value={o.value}>{o.label}</option>)}
+        </select>
+      )
     case 'DATE':
       return <input type="date" className="border rounded w-full p-2" value={value} onChange={(e) => onChange(e.target.value)} />
     case 'TIME':

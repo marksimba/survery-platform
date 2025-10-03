@@ -52,6 +52,8 @@ model Question {
   required  Boolean      @default(false)
   order     Int
   config    Json?
+
+  options   Option[]
 }
 
 enum QuestionType {
@@ -93,6 +95,15 @@ model WebhookEndpoint {
   secret      String
   isActive    Boolean  @default(true)
   createdAt   DateTime @default(now())
+}
+
+model Option {
+  id         String   @id @default(cuid())
+  questionId String
+  question   Question @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  label      String
+  value      String
+  order      Int
 }
 
 model OutboundEvent {
