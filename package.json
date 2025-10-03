@@ -1,0 +1,23 @@
+{
+  "name": "survey-platform",
+  "version": "0.1.0",
+  "private": true,
+  "packageManager": "pnpm@10.18.0",
+  "scripts": {
+    "build": "pnpm -r build",
+    "dev": "pnpm --filter web dev",
+    "lint": "pnpm -r lint",
+    "typecheck": "pnpm -r typecheck",
+    "format": "pnpm -r format",
+    "prisma:generate": "pnpm --filter web prisma generate",
+    "prisma:migrate": "pnpm --filter web prisma migrate dev",
+    "postinstall": "pnpm approve-builds || true"
+  },
+  "engines": {
+    "node": ">=18.18.0"
+  },
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ]
+}

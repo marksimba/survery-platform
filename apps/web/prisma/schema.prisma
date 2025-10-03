@@ -1,0 +1,106 @@
+// Prisma schema for MVP
+// Provider: PostgreSQL
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  name      String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  surveys   Survey[]
+}
+
+model Survey {
+  id          String        @id @default(cuid())
+  title       String
+  description String?
+  slug        String        @unique
+  status      SurveyStatus  @default(DRAFT)
+  theme       Json?
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  ownerId String
+  owner   User     @relation(fields: [ownerId], references: [id])
+
+  questions Question[]
+  responses Response[]
+}
+
+enum SurveyStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+}
+
+model Question {
+  id        String       @id @default(cuid())
+  surveyId  String
+  survey    Survey       @relation(fields: [surveyId], references: [id], onDelete: Cascade)
+  type      QuestionType
+  title     String
+  required  Boolean      @default(false)
+  order     Int
+  config    Json?
+}
+
+enum QuestionType {
+  SHORT_TEXT
+  LONG_TEXT
+  EMAIL
+  NUMBER
+  DATE
+  TIME
+  SINGLE_SELECT
+  MULTI_SELECT
+  DROPDOWN
+  FILE_UPLOAD
+}
+
+model Response {
+  id         String         @id @default(cuid())
+  surveyId   String
+  survey     Survey         @relation(fields: [surveyId], references: [id], onDelete: Cascade)
+  submittedAt DateTime      @default(now())
+  meta       Json?
+  items      ResponseItem[]
+}
+
+model ResponseItem {
+  id         String   @id @default(cuid())
+  responseId String
+  response   Response  @relation(fields: [responseId], references: [id], onDelete: Cascade)
+  questionId String
+  question   Question  @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  value      Json
+}
+
+model WebhookEndpoint {
+  id          String   @id @default(cuid())
+  surveyId    String
+  survey      Survey   @relation(fields: [surveyId], references: [id], onDelete: Cascade)
+  url         String
+  secret      String
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+}
+
+model OutboundEvent {
+  id          String   @id @default(cuid())
+  surveyId    String
+  type        String
+  payload     Json
+  status      String   @default("pending")
+  attemptCount Int     @default(0)
+  createdAt   DateTime @default(now())
+}

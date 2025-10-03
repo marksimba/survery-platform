@@ -1,0 +1,26 @@
+# Node
+node_modules
+*.log
+
+# Env
+.env
+.env.*
+!.env.example
+
+# Build
+.next
+out
+coverage
+
+# Editor
+.vscode
+.DS_Store
+
+# Prisma
+prisma/*.db
+
+# Turbo / pnpm
+.pnpm-store
+
+# macOS
+Icon?
