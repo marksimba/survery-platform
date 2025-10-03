@@ -25,6 +25,9 @@ export default async function SurveyRuntime({ params }: { params: { slug: string
 
   return (
     <main className="p-6 space-y-6 max-w-2xl">
+      {process.env.NEXT_PUBLIC_CAPTCHA_SITE_KEY ? (
+        <script async src={`https://www.google.com/recaptcha/api.js`} />
+      ) : null}
       <h1 className="text-3xl font-semibold">{survey.title}</h1>
       {survey.description && <p className="text-gray-600">{survey.description}</p>}
       <SurveyForm survey={survey} />

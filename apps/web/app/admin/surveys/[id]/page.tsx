@@ -25,6 +25,37 @@ function AddOption({ questionId, onAdded }: { questionId: string, onAdded: () =>
   )
 }
 
+function VisibilityRule({ question, allQuestions, onSaved }: { question: any; allQuestions: any[]; onSaved: () => void }) {
+  const prior = allQuestions.filter((x) => x.order < question.order && x.type !== 'PAGE_BREAK')
+  const [enabled, setEnabled] = useState(!!question.config?.showIf)
+  const [dep, setDep] = useState<string>(question.config?.showIf?.questionId || (prior[0]?.id || ''))
+  const [equals, setEquals] = useState<string>(question.config?.showIf?.equals ?? '')
+  const [saving, setSaving] = useState(false)
+
+  async function save() {
+    setSaving(true)
+    try {
+      const config = enabled && dep ? { showIf: { questionId: dep, equals } } : {}
+      await fetch(`/api/admin/questions/${question.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ config }) })
+      onSaved()
+    } finally { setSaving(false) }
+  }
+
+  return (
+    <div className="text-sm border rounded p-2 bg-gray-50">
+      <div className="flex items-center gap-2">
+        <label className="flex items-center gap-2"><input type="checkbox" checked={enabled} onChange={(e) => setEnabled(e.target.checked)} /> Show only if</label>
+        <select className="border rounded px-2 py-1" value={dep} onChange={(e) => setDep(e.target.value)} disabled={!enabled}>
+          {prior.map((p) => <option key={p.id} value={p.id}>{p.title}</option>)}
+        </select>
+        <span>equals</span>
+        <input className="border rounded px-2 py-1" placeholder="value" value={equals} onChange={(e) => setEquals(e.target.value)} disabled={!enabled} />
+        <button className="border px-2 py-1 rounded" onClick={save} disabled={saving}>{saving ? 'Saving...' : 'Save'}</button>
+      </div>
+    </div>
+  )
+}
+
 export default function BuilderPage({ params }: { params: { id: string } }) {
   const { id } = params
   const [survey, setSurvey] = useState<any | null>(null)
@@ -95,6 +126,9 @@ export default function BuilderPage({ params }: { params: { id: string } }) {
                   <div className="text-sm text-gray-600">{q.type} {q.required ? '(required)' : ''}</div>
                 </div>
               </div>
+              {q.type !== 'PAGE_BREAK' && (
+                <VisibilityRule question={q} allQuestions={survey.questions} onSaved={load} />
+              )}
               {['SINGLE_SELECT','MULTI_SELECT','DROPDOWN'].includes(q.type) && (
                 <div className="pl-2">
                   <div className="text-sm font-medium">Options</div>
@@ -126,8 +160,11 @@ export default function BuilderPage({ params }: { params: { id: string } }) {
             <option value="MULTI_SELECT">Multi select</option>
             <option value="DROPDOWN">Dropdown</option>
             <option value="FILE_UPLOAD">File upload</option>
+            <option value="PAGE_BREAK">Page break</option>
           </select>
-          <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={qRequired} onChange={(e) => setQRequired(e.target.checked)} /> Required</label>
+          {qType !== 'PAGE_BREAK' && (
+            <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={qRequired} onChange={(e) => setQRequired(e.target.checked)} /> Required</label>
+          )}
           <button className="bg-blue-600 text-white px-4 py-2 rounded disabled:opacity-50" disabled={loading || !qTitle.trim()}>Add</button>
         </form>
       </section>

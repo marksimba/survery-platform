@@ -8,6 +8,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   const data: any = {}
   if (typeof body.title === 'string') data.title = body.title
   if (typeof body.required === 'boolean') data.required = body.required
+  if (body && typeof body.config === 'object') data.config = body.config
   const question = await prisma.question.update({ where: { id: params.id }, data })
   return NextResponse.json({ question })
 }

@@ -31,11 +31,85 @@ export default function SurveyForm({ survey }: { survey: Survey }) {
 
   const questions = survey.questions || []
 
+  // Simple pagination: split by PAGE_BREAK
+  const pages: string[][] = useMemo(() => {
+    const result: string[][] = [[]]
+    for (const q of questions) {
+      if (q.type === 'PAGE_BREAK') {
+        if (result[result.length - 1].length === 0) continue
+        result.push([])
+      } else {
+        result[result.length - 1].push(q.id)
+      }
+    }
+    return result.filter((p) => p.length > 0)
+  }, [questions])
+  const [pageIndex, setPageIndex] = useState(0)
+
+  // Visibility based on config.showIf
+  function isVisible(q: Question) {
+    const cfg: any = (q as any).config || {}
+    const rule = cfg.showIf
+    if (!rule) return true
+    const v = values[rule.questionId]
+    if (Array.isArray(v)) return v.includes(rule.equals)
+    return (v ?? '') === rule.equals
+  }
+
+  const visibleIdsOnPage = (pages[pageIndex] || []).filter((id) => {
+    const q = questions.find((x) => x.id === id)!
+    return isVisible(q)
+  })
+
+  function validatePage() {
+    for (const id of visibleIdsOnPage) {
+      const q = questions.find((x) => x.id === id)!
+      if (q.required) {
+        const v = values[id]
+        if (v === undefined || v === null || (Array.isArray(v) ? v.length === 0 : String(v).trim() === '')) {
+          return `${q.title} is required`
+        }
+      }
+      if (q.type === 'EMAIL' && values[id]) {
+        const re = /[^@\s]+@[^@\s]+\.[^@\s]+/
+        if (!re.test(String(values[id]))) return `Invalid email for "${q.title}"`
+      }
+      if (q.type === 'NUMBER' && values[id] !== undefined && values[id] !== '') {
+        const n = Number(values[id])
+        if (Number.isNaN(n)) return `Invalid number for "${q.title}"`
+      }
+    }
+    return null
+  }
+
   function setValue(id: string, v: any) {
     setValues((prev) => ({ ...prev, [id]: v }))
   }
 
-  function validate() {
+  function validateAll() {
+    for (let pi = 0; pi < pages.length; pi++) {
+      const ids = pages[pi]
+      for (const id of ids) {
+        const q = questions.find((x) => x.id === id)!
+        if (!isVisible(q)) continue
+        if (q.required) {
+          const v = values[id]
+          if (v === undefined || v === null || (Array.isArray(v) ? v.length === 0 : String(v).trim() === '')) {
+            return `${q.title} is required`
+          }
+        }
+        if (q.type === 'EMAIL' && values[id]) {
+          const re = /[^@\s]+@[^@\s]+\.[^@\s]+/
+          if (!re.test(String(values[id]))) return `Invalid email for "${q.title}"`
+        }
+        if (q.type === 'NUMBER' && values[id] !== undefined && values[id] !== '') {
+          const n = Number(values[id])
+          if (Number.isNaN(n)) return `Invalid number for "${q.title}"`
+        }
+      }
+    }
+    return null
+  }
     for (const q of questions) {
       if (q.required && (values[q.id] === undefined || values[q.id] === '')) {
         return `${q.title} is required`
@@ -53,18 +127,36 @@ export default function SurveyForm({ survey }: { survey: Survey }) {
   }
 
   async function onSubmit(e: React.FormEvent) {
+    // If CAPTCHA site key is present, ensure token exists for v2 checkbox
+    const siteKey = process.env.NEXT_PUBLIC_CAPTCHA_SITE_KEY
+    if (typeof window !== 'undefined' && siteKey) {
+      const tokenEl = document.querySelector('textarea[name="g-recaptcha-response"]') as HTMLTextAreaElement | null
+      const token = tokenEl?.value
+      if (!token) {
+        setError('Please complete the CAPTCHA')
+        e.preventDefault()
+        return
+      }
+    }
     e.preventDefault()
     setError(null)
-    const err = validate()
+    const err = validateAll()
     if (err) { setError(err); return }
 
     setSubmitting(true)
     try {
-      const items = questions.map((q) => ({ questionId: q.id, value: values[q.id] ?? '' }))
+      const items = questions
+        .filter((q) => q.type !== 'PAGE_BREAK' && isVisible(q))
+        .map((q) => ({ questionId: q.id, value: values[q.id] ?? (q.type === 'MULTI_SELECT' ? [] : '') }))
+      let captchaToken: string | undefined
+      if (typeof window !== 'undefined') {
+        const tokenEl = document.querySelector('textarea[name="g-recaptcha-response"]') as HTMLTextAreaElement | null
+        captchaToken = tokenEl?.value || undefined
+      }
       const res = await fetch(`/api/surveys/${survey.id}/submit`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ items }),
+        body: JSON.stringify({ items, captchaToken }),
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data?.error || 'Submission failed')
@@ -85,23 +177,52 @@ export default function SurveyForm({ survey }: { survey: Survey }) {
     )
   }
 
+  function nextPage() {
+    const err = validatePage()
+    if (err) { setError(err); return }
+    setPageIndex((i) => Math.min(i + 1, pages.length - 1))
+  }
+  function prevPage() {
+    setPageIndex((i) => Math.max(i - 1, 0))
+  }
+
+  const pagePercent = Math.round(((pageIndex + 1) / (pages.length || 1)) * 100)
+
   return (
     <form className="space-y-4" onSubmit={onSubmit}>
+      {process.env.NEXT_PUBLIC_CAPTCHA_SITE_KEY ? (
+        <div className="hidden">
+          {/* Ensure the reCAPTCHA response field is present if checkbox is used */}
+          <textarea name="g-recaptcha-response" readOnly className="hidden"></textarea>
+        </div>
+      ) : null}
       <div className="h-2 bg-gray-200 rounded">
-        <div className="h-2 bg-blue-600 rounded" style={{ width: `${Math.round(((answeredCount)/(questions.length || 1))*100)}%` }} />
+        <div className="h-2 bg-blue-600 rounded" style={{ width: `${pagePercent}%` }} />
       </div>
       {error && <div className="border border-red-300 bg-red-50 text-red-800 p-3 rounded">{error}</div>}
-      {questions.map((q) => (
-        <div key={q.id} className="space-y-1">
-          <label className="block font-medium">
-            {q.title} {q.required && <span className="text-red-600">*</span>}
-          </label>
-          <Field q={q} value={values[q.id] ?? ''} onChange={(v) => setValue(q.id, v)} />
-        </div>
-      ))}
-      <button className="bg-blue-600 text-white px-4 py-2 rounded disabled:opacity-50" disabled={submitting}>
-        {submitting ? 'Submitting...' : 'Submit'}
-      </button>
+      {(pages[pageIndex] || []).map((id) => {
+        const q = questions.find((x) => x.id === id)!
+        if (!isVisible(q)) return null
+        return (
+          <div key={id} className="space-y-1">
+            <label className="block font-medium">
+              {q.title} {q.required && <span className="text-red-600">*</span>}
+            </label>
+            <Field q={q} value={values[id] ?? (q.type === 'MULTI_SELECT' ? [] : '')} onChange={(v) => setValue(id, v)} />
+          </div>
+        )
+      })}
+
+      <div className="flex items-center gap-2">
+        {pageIndex > 0 && <button type="button" className="border px-4 py-2 rounded" onClick={prevPage}>Back</button>}
+        {pageIndex < pages.length - 1 ? (
+          <button type="button" className="bg-blue-600 text-white px-4 py-2 rounded" onClick={nextPage}>Next</button>
+        ) : (
+          <button className="bg-green-600 text-white px-4 py-2 rounded disabled:opacity-50" disabled={submitting}>
+            {submitting ? 'Submitting...' : 'Submit'}
+          </button>
+        )}
+      </div>
     </form>
   )
 }

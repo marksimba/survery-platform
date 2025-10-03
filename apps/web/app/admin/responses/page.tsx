@@ -12,8 +12,14 @@ export default function ResponsesPage() {
     setSurveys(data.surveys || [])
     if (data.surveys?.[0]?.id) setSurveyId((s: string) => s || data.surveys[0].id)
   }
+  let fromDate: string | undefined
+  let toDate: string | undefined
+
   async function loadResponses(id: string) {
-    const res = await fetch(`/api/admin/responses?surveyId=${encodeURIComponent(id)}`, { cache: 'no-store' })
+    const sp = new URLSearchParams({ surveyId: id })
+    if (fromDate) sp.set('from', fromDate)
+    if (toDate) sp.set('to', toDate)
+    const res = await fetch(`/api/admin/responses?${sp.toString()}`, { cache: 'no-store' })
     const data = await res.json()
     setResponses(data.responses || [])
   }
@@ -21,13 +27,21 @@ export default function ResponsesPage() {
   useEffect(() => { loadSurveys() }, [])
   useEffect(() => { if (surveyId) loadResponses(surveyId) }, [surveyId])
 
+  function loadResponsesWithDates(from?: string, to?: string) {
+    if (from !== undefined) fromDate = from
+    if (to !== undefined) toDate = to
+    if (surveyId) loadResponses(surveyId)
+  }
+
   return (
     <main className="p-6 space-y-4">
       <h1 className="text-2xl font-semibold">Responses</h1>
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-2 flex-wrap">
         <select className="border rounded px-2 py-1" value={surveyId} onChange={(e) => setSurveyId(e.target.value)}>
           {surveys.map((s) => <option key={s.id} value={s.id}>{s.title}</option>)}
         </select>
+        <label className="text-sm">From <input type="date" className="border rounded px-2 py-1 ml-1" onChange={(e) => loadResponsesWithDates(e.target.value || undefined, undefined)} /></label>
+        <label className="text-sm">To <input type="date" className="border rounded px-2 py-1 ml-1" onChange={(e) => loadResponsesWithDates(undefined, e.target.value || undefined)} /></label>
         {surveyId && (
           <a className="underline text-blue-600" href={`/api/export/csv?surveyId=${encodeURIComponent(surveyId)}`}>Download CSV</a>
         )}
@@ -43,7 +57,7 @@ export default function ResponsesPage() {
         <tbody>
           {responses.map((r) => (
             <tr key={r.id}>
-              <td className="border px-2 py-1">{r.id}</td>
+              <td className="border px-2 py-1"><a className="underline text-blue-600" href={`/admin/responses/${r.id}`}>{r.id}</a></td>
               <td className="border px-2 py-1">{new Date(r.submittedAt).toLocaleString()}</td>
             </tr>
           ))}
